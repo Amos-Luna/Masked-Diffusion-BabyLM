@@ -60,7 +60,7 @@ words_per_token`. Each checkpoint contains a standard
 step_07812_words_010M/
 ├── config.json                 MaskedDiffusionConfig (incl. auto_map)
 ├── model.safetensors           weights
-├── trainer_state.pt            optimizer + RNG + step (for resume; not uploaded)
+├── trainer_state.pt            optimizer + LR scheduler + RNG + step (resume; not uploaded)
 └── ckpt_meta.json              {step, words_seen, words_m, saved_at}
 ```
 

@@ -80,12 +80,21 @@ diffusion:
 
 training:
   optimizer: "adamw"
-  learning_rate: 3.0e-4
+  # Scaled from the official GPT-2 baseline's 5e-5: our effective batch is ~4x
+  # larger in tokens (32x1024 vs 16x512), so a higher peak LR is appropriate.
+  learning_rate: 2.0e-4
   weight_decay: 0.1
   beta1: 0.9
   beta2: 0.95
-  warmup_steps: 1_000
+  # Warmup as a FRACTION of total steps (robust if the word budget changes).
+  # ~5% is standard for a short run; the baseline used ~1% (213/21300). A fixed
+  # 1000 steps would have been ~25% of the 3913-step 100M-word budget — far too
+  # long (the peak LR wouldn't be reached until ~25M words).
+  warmup_ratio: 0.05
   lr_schedule: "cosine"
+  # Cosine decays to this fraction of the peak LR rather than to 0 (10% floor is
+  # standard practice and keeps a little plasticity at the end of the budget).
+  min_lr_ratio: 0.1
   # 32 x 1024-token sequences fits a 16GB T4 with the ~98M model in bf16.
   # Effective batch = batch_size x grad_accum_steps. If you OOM, halve
   # batch_size and double grad_accum_steps to keep the effective batch fixed.
