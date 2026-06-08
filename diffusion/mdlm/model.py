@@ -63,8 +63,11 @@ class MaskedDiffusionLM(PreTrainedModel):
     base_model_prefix = "mdlm"
     supports_gradient_checkpointing = False
     # Tells HF that lm_head.weight is tied to the input embedding (so
-    # save_pretrained does not treat it as an illegal shared tensor).
-    _tied_weights_keys = ["lm_head.weight"]
+    # save_pretrained does not treat it as an illegal shared tensor). Recent
+    # transformers (>=4.53) require the {target: source} dict form; older ones
+    # (e.g. the eval pipeline's 4.51.3) iterate it as keys, so the dict is
+    # backward-compatible. A bare list crashes get_expanded_tied_weights_keys().
+    _tied_weights_keys = {"lm_head.weight": "tok_emb.weight"}
 
     def __init__(self, config: MaskedDiffusionConfig) -> None:
         super().__init__(config)
