@@ -513,7 +513,8 @@ def main(argv: list[str] | None = None) -> int:
             runs_root = REPO_ROOT / "runs"
             candidates = sorted(
                 (d for d in runs_root.glob(f"*_{args.condition}_seed{args.seed}")
-                 if (d / "checkpoints").is_dir() and any((d / "checkpoints").glob("step_*"))),
+                 if not d.name.startswith("_smoke")
+                 and (d / "checkpoints").is_dir() and any((d / "checkpoints").glob("step_*"))),
                 key=lambda d: d.stat().st_mtime,
             )
             if candidates and not args.no_resume:
