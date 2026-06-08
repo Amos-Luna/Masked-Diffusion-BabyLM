@@ -9,10 +9,10 @@ never loses work.
 ## 1. Google Drive root
 
 `scripts/colab_bootstrap.sh --drive-root <ROOT>` symlinks three repo folders to
-Drive (default `ROOT = /content/drive/MyDrive/BabyLM/diffusion`):
+Drive (default `ROOT = /content/drive/MyDrive/Researchs/BabyLM_diffusion_G4`):
 
 ```
-/content/drive/MyDrive/BabyLM/diffusion/
+/content/drive/MyDrive/Researchs/BabyLM_diffusion_G4/
 ├── data/
 │   ├── tokens/                     pre-tokenized shards (shard_0000.npy, … + manifest.json)
 │   └── _synthetic/                 throwaway smoke-test corpus
@@ -92,7 +92,7 @@ revision="chck_10M", trust_remote_code=True)` works for the evaluators. `main`
 also carries the `README.md` model card.
 
 ```
-https://huggingface.co/<user>/babylm-2026-strict-small-mdlm-seed42
+https://huggingface.co/amosluna/babylm-2026-strict-small-mdlm-seed42
 ├── (main)        config.json, model.safetensors, config.py, model.py,
 │                 tokenizer.json, tokenizer_config.json, …, README.md, ckpt_meta.json
 ├── (chck_1M)     same files for the 1M-word checkpoint

@@ -116,6 +116,6 @@ python scripts/train.py --condition MD_base --seed 42 \
     --token-data data/tokens --tokenizer tokenizer/mdlm_bpe_16k -v
 
 # Upload + evaluate + collate  (see docs/EVALUATION.md)
-python scripts/upload_to_hf.py --run-dir runs/<run> --repo-id <user>/... \
+python scripts/upload_to_hf.py --run-dir runs/<run> --repo-id amosluna/... \
     --tokenizer-dir tokenizer/mdlm_bpe_16k --condition MD_base --seed 42
 ```

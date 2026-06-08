@@ -25,7 +25,7 @@ Usage:
     export HF_TOKEN="hf_..."
     python scripts/upload_to_hf.py \
         --run-dir runs/2026-06-08_MD_base_seed42 \
-        --repo-id <user>/babylm-2026-strict-small-mdlm-seed42 \
+        --repo-id amosluna/babylm-2026-strict-small-mdlm-seed42 \
         --tokenizer-dir tokenizer/mdlm_bpe_16k \
         --condition MD_base --seed 42
     # add --dry-run to plan without uploading.
@@ -140,7 +140,7 @@ pseudo-log-likelihood), so the official BabyLM pipeline evaluates it with the
 ```bash
 cd strict
 ./eval_zero_shot.sh {repo_id} mlm
-./eval_finetuning.sh {repo_id}
+./eval_finetuning.sh --model_path {repo_id} --seed 42
 bash scripts/collate_preds.sh {repo_id} mlm strict-small --fast
 ```
 
