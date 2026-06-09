@@ -119,6 +119,8 @@ class MaskedDiffusionLM(PreTrainedModel):
         attention_mask: torch.Tensor | None = None,
         labels: torch.LongTensor | None = None,
         layer_duplication_factor: int | None = None,
+        token_type_ids: torch.Tensor | None = None,
+        **kwargs,
     ) -> MaskedLMOutput:
         """Run the bidirectional encoder.
 
@@ -131,6 +133,11 @@ class MaskedDiffusionLM(PreTrainedModel):
                 and is used by the training loop instead.
             layer_duplication_factor: optional inference-time "reasoning depth"
                 override (repeats the middle blocks). Defaults to the config value.
+            token_type_ids / **kwargs: accepted and ignored. This model is a
+                single-segment bidirectional encoder, but HF tokenizers emit
+                ``token_type_ids`` by default and some eval harnesses (e.g. the
+                official ``reading`` task) call ``model(**tokenizer(...))``, so we
+                must tolerate these extra arguments instead of crashing.
 
         Returns:
             ``MaskedLMOutput`` with ``logits`` of shape (B, T, vocab_size + 1).
