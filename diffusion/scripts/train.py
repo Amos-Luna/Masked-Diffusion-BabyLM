@@ -274,7 +274,8 @@ def train(
     block_size = int(config["model"]["n_positions"])
     batch_size = int(config["training"]["batch_size"])
     train_stream, dev_stream = build_streams(
-        token_data_dir, block_size=block_size, use_synthetic=use_synthetic, seed=seed
+        token_data_dir, block_size=block_size, use_synthetic=use_synthetic, seed=seed,
+        dev_fraction=float(config["data"].get("dev_fraction", 0.01)),
     )
     provider = BatchProvider(train_stream)
 
@@ -333,13 +334,34 @@ def train(
         LOG.info("Resuming from %s at step %d.", resumed_from, start_step)
         print(f"** Resuming from checkpoint {resumed_from} (step {start_step}). **")
 
-    # Derive total_steps from the word budget unless overridden.
+    # ── Word budget: prefer the corpus manifest's TRUE words/token ratio ──────
+    # The config's words_per_token is only a fallback estimate. Using the actual
+    # n_words/n_tokens keeps the words-seen accounting honest, and capping at
+    # max_epochs * n_words guarantees CFP compliance even if the corpus has
+    # slightly fewer than 10M words (100M seen would then exceed 10 epochs).
     words_per_token = float(config["data"]["words_per_token"])
+    word_budget = float(config["training"]["total_word_budget"])
+    manifest_path = Path(token_data_dir) / "manifest.json" if token_data_dir else None
+    if manifest_path is not None and manifest_path.exists():
+        man = json.loads(manifest_path.read_text())
+        n_words, n_tokens = man.get("n_words"), man.get("n_tokens")
+        if n_words and n_tokens:
+            words_per_token = n_words / n_tokens
+            max_epochs = float(config["training"].get("max_epochs", 10))
+            epoch_cap = max_epochs * n_words
+            if epoch_cap < word_budget:
+                LOG.info("Capping word budget at %d (= %g epochs x %d corpus words) < %d.",
+                         int(epoch_cap), max_epochs, n_words, int(word_budget))
+                word_budget = epoch_cap
+            LOG.info("Manifest: %d words / %d tokens -> words_per_token=%.4f.",
+                     n_words, n_tokens, words_per_token)
     words_per_step = batch_size * block_size * words_per_token
     if total_steps_override is not None:
         total_steps = total_steps_override
     else:
-        total_steps = int(np.ceil(config["training"]["total_word_budget"] / words_per_step))
+        # floor, not ceil: one step under the budget is always compliant; one
+        # step over the 10-epoch cap is a CFP violation.
+        total_steps = max(int(word_budget // words_per_step), 1)
 
     # ── LR schedule: linear warmup → cosine decay ────────────────────────────
     # Declared in base.yaml; applied here. Stepped once per training iteration so
