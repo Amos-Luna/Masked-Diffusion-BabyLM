@@ -2,7 +2,7 @@
 """Patch an already-uploaded HF repo so the official BabyLM eval pipeline works,
 without re-uploading the multi-hundred-MB weights.
 
-Two fixes, applied to ``main`` AND every ``chck_*`` revision (only tiny text
+Three fixes, applied to ``main`` AND every ``chck_*`` revision (only tiny text
 files are pushed, so it runs in seconds):
 
 1. **tokenizer_config.json** -- tokenizers saved by transformers>=5 carry
@@ -14,6 +14,13 @@ files are pushed, so it runs in seconds):
    via ``trust_remote_code=True``. We re-push the latest local copies from
    ``mdlm/`` so fixes (e.g. ``forward`` now tolerating ``token_type_ids`` that the
    ``reading`` task passes) reach already-uploaded checkpoints.
+
+3. **config.json (auto_map)** -- the Auto* classes resolve remote code through
+   the ``auto_map`` stored in *config.json* (frozen at training time), NOT
+   through config.py. Old checkpoints only registered ``AutoModelForMaskedLM``,
+   but the GLUE fine-tuning harness loads encoders with ``AutoModel`` ->
+   "Unrecognized configuration class ... for this kind of AutoModel". We add
+   ``AutoModel -> model.MaskedDiffusionModel`` (the headless encoder class).
 
 Usage:
     export HF_TOKEN="hf_..."
@@ -40,11 +47,27 @@ CODE_FILES = ["model.py", "config.py"]  # executed on the Hub via trust_remote_c
 PORTABLE_CLASS = "PreTrainedTokenizerFast"
 
 
+AUTO_MAP = {
+    "AutoConfig": "config.MaskedDiffusionConfig",
+    "AutoModel": "model.MaskedDiffusionModel",          # GLUE finetune (headless)
+    "AutoModelForMaskedLM": "model.MaskedDiffusionLM",  # zero-shot mlm backend
+}
+
+
 def normalize_tokenizer_cfg(cfg_text: str) -> tuple[str, bool]:
     cfg = json.loads(cfg_text)
     changed = cfg.get("tokenizer_class") != PORTABLE_CLASS or "backend" in cfg
     cfg["tokenizer_class"] = PORTABLE_CLASS
     cfg.pop("backend", None)  # tokenizers>=5-only key
+    return json.dumps(cfg, indent=2), changed
+
+
+def normalize_model_cfg(cfg_text: str) -> tuple[str, bool]:
+    cfg = json.loads(cfg_text)
+    auto_map = dict(cfg.get("auto_map", {}))
+    changed = any(auto_map.get(k) != v for k, v in AUTO_MAP.items())
+    auto_map.update(AUTO_MAP)
+    cfg["auto_map"] = auto_map
     return json.dumps(cfg, indent=2), changed
 
 
@@ -84,7 +107,18 @@ def patch_repo(api, repo_id: str, dry_run: bool) -> None:
                 api.upload_file(path_or_fileobj=str(src), path_in_repo=fn,
                                 repo_id=repo_id, repo_type="model", revision=rev,
                                 commit_message=f"fix: refresh {fn} (eval compatibility)")
-            LOG.info("[%s]   patched %s", repo_id, rev)
+            # config.json is frozen per checkpoint, so the auto_map must be
+            # patched revision by revision.
+            cfg_path = hf_hub_download(repo_id=repo_id, filename="config.json", revision=rev)
+            cfg_text, cfg_changed = normalize_model_cfg(Path(cfg_path).read_text())
+            if cfg_changed:
+                cfg_fp = Path(td) / f"config_{rev}.json"
+                cfg_fp.write_text(cfg_text)
+                api.upload_file(path_or_fileobj=str(cfg_fp), path_in_repo="config.json",
+                                repo_id=repo_id, repo_type="model", revision=rev,
+                                commit_message="fix: register AutoModel in auto_map (GLUE finetune)")
+            LOG.info("[%s]   patched %s (auto_map %s)", repo_id, rev,
+                     "updated" if cfg_changed else "ok")
     LOG.info("[%s] done. https://huggingface.co/%s", repo_id, repo_id)
 
 

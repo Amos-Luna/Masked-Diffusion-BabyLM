@@ -19,7 +19,7 @@ import math
 import torch
 import torch.nn as nn
 from transformers import PreTrainedModel
-from transformers.modeling_outputs import MaskedLMOutput
+from transformers.modeling_outputs import BaseModelOutput, MaskedLMOutput
 
 from .config import MaskedDiffusionConfig
 
@@ -142,6 +142,23 @@ class MaskedDiffusionLM(PreTrainedModel):
         Returns:
             ``MaskedLMOutput`` with ``logits`` of shape (B, T, vocab_size + 1).
         """
+        x = self._encode(input_ids, attention_mask, layer_duplication_factor)
+        logits = self.lm_head(x)
+
+        loss = None
+        if labels is not None:
+            loss = nn.functional.cross_entropy(
+                logits.view(-1, logits.size(-1)), labels.view(-1), ignore_index=-100
+            )
+        return MaskedLMOutput(loss=loss, logits=logits)
+
+    def _encode(
+        self,
+        input_ids: torch.LongTensor,
+        attention_mask: torch.Tensor | None,
+        layer_duplication_factor: int | None,
+    ) -> torch.Tensor:
+        """Run the encoder stack and return final hidden states (B, T, n_embd)."""
         B, T = input_ids.shape
         device = input_ids.device
         pos = torch.arange(T, device=device).unsqueeze(0).expand(B, T)
@@ -153,19 +170,10 @@ class MaskedDiffusionLM(PreTrainedModel):
             key_padding_mask = attention_mask == 0
 
         dup = layer_duplication_factor or self.config.layer_duplication_factor
-        blocks = self._expanded_blocks(dup)
-        for block in blocks:
+        for block in self._expanded_blocks(dup):
             x = block(x, key_padding_mask)
 
-        x = self.ln_f(x)
-        logits = self.lm_head(x)
-
-        loss = None
-        if labels is not None:
-            loss = nn.functional.cross_entropy(
-                logits.view(-1, logits.size(-1)), labels.view(-1), ignore_index=-100
-            )
-        return MaskedLMOutput(loss=loss, logits=logits)
+        return self.ln_f(x)
 
     def _expanded_blocks(self, dup: int):
         """Return the block sequence, optionally repeating the middle blocks.
@@ -179,3 +187,27 @@ class MaskedDiffusionLM(PreTrainedModel):
             return self.blocks
         first, *middle, last = list(self.blocks)
         return [first, *(middle * dup), last]
+
+
+class MaskedDiffusionModel(MaskedDiffusionLM):
+    """Headless variant: same weights, returns hidden states instead of logits.
+
+    Registered under ``AutoModel`` in ``auto_map``. The official BabyLM GLUE
+    fine-tuning harness loads encoders with ``AutoModel.from_pretrained`` and
+    feeds ``last_hidden_state`` (B, T, n_embd) into its own classification head,
+    so this class must NOT return logits — ``MaskedLMOutput.logits`` would be
+    (B, T, vocab+1) and the harness would mistake it for the encodings.
+    The parameter names are identical to :class:`MaskedDiffusionLM`, so any
+    checkpoint loads into either class unchanged.
+    """
+
+    def forward(  # type: ignore[override]
+        self,
+        input_ids: torch.LongTensor,
+        attention_mask: torch.Tensor | None = None,
+        layer_duplication_factor: int | None = None,
+        token_type_ids: torch.Tensor | None = None,
+        **kwargs,
+    ) -> BaseModelOutput:
+        x = self._encode(input_ids, attention_mask, layer_duplication_factor)
+        return BaseModelOutput(last_hidden_state=x)
