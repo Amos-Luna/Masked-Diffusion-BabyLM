@@ -1,6 +1,6 @@
 # Results so far & Next Steps
 
-Status as of **2026-06-09**. Model: `MD_base`, seed 42, trained on the
+Status as of **2026-06-09**. Model: `MD_base` [see configs/ folder], seed 42, trained on the
 **v2 pipeline** (see `EXPERIMENTS.md` §6.2) for the full Strict-Small budget
 (10 epochs / ~61M words-seen cap from the manifest). Scores from the official
 `mlm` backend (PLL), zero-shot full sets.
@@ -54,7 +54,7 @@ Then, in order:
    while Entity Tracking holds ~40, that trade-off is the central result of
    the paper.
 5. **Seeds 13 & 71 for MD_base** — robustness; report median ± min–max.
-6. **`MD_freq_mask`** — frequency-informed masking ablation.
+6. **`MD_freq_mask`** — (see configs/ folder) frequency-informed masking ablation.
 7. **Submission** — `collate_preds.sh` on the best configuration → upload
    `all_full_preds_and_fast_scores_mlm.json` to the
    [leaderboard](https://huggingface.co/spaces/BabyLM-community/BabyLM-Leaderboard-2026).
