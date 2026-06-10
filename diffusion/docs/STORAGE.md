@@ -18,7 +18,8 @@ Drive (default `ROOT = /content/drive/MyDrive/Researchs/BabyLM_diffusion_G4`):
 │   └── _synthetic/                 throwaway smoke-test corpus
 ├── tokenizer/
 │   └── mdlm_bpe_16k/               HF tokenizer dir (defines [MASK] at id == vocab_size)
-└── runs/                           one subfolder per (condition, seed) training run
+├── runs/                           one subfolder per (condition, seed) training run
+└── results/                        evaluation runs persisted from Colab (see §4)
 ```
 
 `data/` and `tokenizer/` are produced once by `scripts/prepare_data.py` and
@@ -141,6 +142,31 @@ strict/results/
   `collate_preds.sh <model> mlm strict-small` and is the file uploaded to the
   [leaderboard](https://huggingface.co/spaces/BabyLM-community/BabyLM-Leaderboard-2026).
 
+### Persisting eval results to Drive (append-only)
+
+`strict/results/` lives on the **ephemeral** Colab disk. Cell 10 of
+`3_evaluation_pipeline.ipynb` copies everything to Drive under **one immutable
+directory per eval run** (the standard MLflow/W&B-style layout): grouped by
+model, named with an ISO-8601 timestamp so runs sort chronologically and can
+never collide — multiple evals of the same model on the same day coexist, and
+**nothing is ever overwritten** (the cell aborts if the target dir exists).
+
+```
+{DRIVE_ROOT}/results/
+└── amosluna__babylm-2026-strict-small-mdlm-seed42/     ← model (/" -> "__")
+    ├── 2026-06-08_143052/                              ← one eval = one folder
+    │   ├── eval_meta.json        model_id, backend, track, eval date,
+    │   │                         git SHA of the eval code, tasks covered
+    │   ├── results_summary.csv   flattened scores (split, task, metric, score)
+    │   ├── results/              full copy of strict/results/ (reports + predictions)
+    │   └── *.zip                 submission file, if collate_preds was run
+    └── 2026-06-10_091500/                              ← a later eval, untouched
+        └── …
+```
+
+`eval_meta.json` is the provenance record: months later it tells you exactly
+which model, code version, and task set produced each number in the paper.
+
 ## 5. One-glance data flow
 
 ```
@@ -153,4 +179,6 @@ upload_to_hf.py ─► Hub: main + chck_1M … chck_100M  (code + tokenizer bund
 eval (mlm backend / diffusion_eval_backend.py) ─► strict/results/<model>/…/predictions.json
         │
 collate_preds.sh ─► all_full_preds_and_fast_scores_mlm.json ─► leaderboard
+        │
+notebook 3, Cell 10 ─► Drive: results/<model>/<timestamp>/  (append-only archive)
 ```
